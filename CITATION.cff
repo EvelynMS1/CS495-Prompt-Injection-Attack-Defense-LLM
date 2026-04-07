@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+title: "CS495 Project Title"
+message: "If you use this, cite it as below "
+authors:
+  -family-names: "Montes"
+  -given-names: "Evelyn"
+  -date released: 2026
+  -version: 1.0.0
+  -license: MIT
