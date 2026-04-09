@@ -1,4 +1,4 @@
-# CS495-keen-Project
+# CS495-Prompt-Injection-Attack-Defense-LLM
 
 ## Project Description (what problem you are solving)
 
