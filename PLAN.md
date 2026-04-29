@@ -12,7 +12,7 @@ This project aims to build an intelligent chatbot that recommends TED talks by a
 
 ### Objective
 
--Process the Ted Talk dataset utilizing a sentiment analysis model DistilBert
+-Process the Ted Talk dataset utilizing a sentiment analysis model DistilBert, RoBERTa, GoEmotions, Bert
 -Embedd the Ted talk dataset with latest embedding model in vectors
 -Store vectors in a vector database Chroma
 
@@ -71,15 +71,29 @@ python src/main.py
 
 ### Phase 1: Data Collection & Cleaning
 
-**Goal:** Establish a robust development environment and prepare the raw data for processing. -[ ] Import the TED Talk dataset (transcripts, metadata, and tags). -[ ] Perform Exploratory Data Analysis (EDA) to identify data distribution and cleaning requirements. -[ ] Handle missing values and outliers -[ ] Feature engineering (create new columns)
+**Goal:** Establish a robust development environment and prepare the raw data for processing.
+
+- [ ] Import the TED Talk dataset.
+- [ ] Perform comprehensive EDA to assess feature sparsity, identify data distribution across metadata fields (e.g., speaker occupations, topics), and establish preprocessing pipelines for noise reduction in text and numerical outliers.
+- [ ] Handle missing values and outliers
+- [ ] Develop a multi-dimensional feature set by vectorizing high-context metadata (Titles, Descriptions, Topics) and encoding categorical attributes (Speaker Occupations) to serve as weighting factors in the recommendation ranking algorithm.
 
 ### Phase 2: Data Engineering & Dataset Sentiment Analysis
 
-**Goal:** Enrich the static dataset with sentiment scores. -[ ] Implement a Sentiment Analysis pipeline (e.g., using a pre-trained BERT model or VADER) to score each talk. -[ ] Segment scores into categories (e.g., Inspiring, Informative, Challenging, Humorous). -[ ] Save the enriched dataset into a structured format (CSV or vector database).
+**Goal:** Enrich the static dataset with sentiment scores.
 
-### Phase 3: Recommendation Engine DevelopmentDeployment
+- [ ] Implement a Sentiment Analysis pipeline (e.g., using a pre-trained BERT model DistilBERT and RoBERTa and GoEmotions) to score each talk for emotional testing.
+- [ ] Identify emotion scores that each trasncript showcases, a semtiment trajectory that utilizes re-trained BERT model DistilBERT and RoBERTa and GoEmotions.
+- [ ] Synthesize sentiment polarity scores with content embeddings to align recommendations with the user’s emotional intent and topical interests
+- [ ] Save the enriched dataset into a structured format (vector database).
 
-**Goal:** Create the logic that matches users to content. -[ ] Implement text vectorization (e.g., TF-IDF or Word/Sentence Embeddings). -[ ] Develop a hybrid recommendation algorithm: - **Content Filtering:** Matching keywords and tags. - **Sentiment Matching:** Adjusting recommendations based on the emotional delta between user and talk. -[ ] Test the engine with sample queries to ensure diverse and relevant outputs. -[ ] Add interactive prediction form -[ ] Write documentation and README
+### Phase 3: Recommendation Engine Development Deployment
+
+- [ ] Initialize ChromaDB with a collection schema that stores both semantic embeddings (content) and metadata (sentiment scores/trajectories)
+- [ ] Develop a hybrid recommendation algorithm: - **cosine similarity** and **Sentiment alignment**.
+- [ ] Test the engine with sample queries to ensure diverse and relevant outputs track mood matching, based on the user mood what is the recommendation mood.
+- [ ] Add interactive prediction form
+- [ ] Write documentation and README
 
 ## Phase 4: Chatbot Architecture & Live Prompt Processing
 
@@ -94,7 +108,7 @@ python src/main.py
 
 - **Language:** Python
 - **ML Frameworks:** PyTorch / Hugging Face Transformers
-- **Sentiment Analysis:** VADER or DistilBERT
+- **Sentiment Analysis:** DistilBERT, BERT, GoEmotions
 - **Data Handling:** Pandas / NumPy
 - **Frontend:** Streamlit or a dedicated Web API
   """
@@ -108,6 +122,9 @@ python src/main.py
 -Cosine Similarity
 
 ### Evaluation Metrics
+
+-Sentiment Closeness
+-Hallucination Rate
 
 ### Visualization
 
