@@ -69,6 +69,11 @@ python src/main.py
 
 ## Tasks
 
+## Data Source
+
+- Path: ./data/ted_talks_en.csv
+- Focus: English transcripts only
+
 ### Phase 1: Data Collection & Cleaning
 
 **Goal:** Establish a robust development environment and prepare the raw data for processing.
