@@ -13,6 +13,7 @@ from transformers import pipeline
 
 sys.path.insert(0, os.path.dirname(__file__))
 from phase3_recommendation import RecommendationEngine
+from cf_baseline import CFBiasBaseline
 from model_config import (
     EMBEDDING_MODELS,
     EMOTION_MODELS,
@@ -74,6 +75,12 @@ def load_engine(embedding_model_key):
             f"```bash\npy -3.12 src/phase2_sentiment_embeddings.py\n```"
         )
         st.stop()
+
+
+@st.cache_resource(show_spinner="Loading CF bias baseline...")
+def load_cf_baseline():
+    """Load CF bias baseline for comparison."""
+    return CFBiasBaseline()
 
 
 # -- Helpers ------------------------------------------------------------------
@@ -246,6 +253,7 @@ with st.sidebar:
 # Load models with current selection
 emotion_pipe, emotion_config = load_emotion_model(st.session_state.selected_emotion_model)
 engine = load_engine(st.session_state.selected_embedding_model)
+cf_baseline = load_cf_baseline()
 
 # Continue sidebar
 with st.sidebar:
