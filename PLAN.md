@@ -78,25 +78,25 @@ python src/main.py
 
 **Goal:** Establish a robust development environment and prepare the raw data for processing.
 
-- [ ] Import the TED Talk dataset.
-- [ ] Perform comprehensive EDA to assess feature sparsity, identify data distribution across metadata fields (e.g., speaker occupations, topics), and establish preprocessing pipelines for noise reduction in text and numerical outliers.
-- [ ] Handle missing values and outliers
-- [ ] Develop a multi-dimensional feature set by vectorizing high-context metadata (Titles, Descriptions, Topics) and encoding categorical attributes (Speaker Occupations) to serve as weighting factors in the recommendation ranking algorithm.
+- [x] Import the TED Talk dataset.
+- [x] Perform comprehensive EDA to assess feature sparsity, identify data distribution across metadata fields (e.g., speaker occupations, topics), and establish preprocessing pipelines for noise reduction in text and numerical outliers.
+- [x] Handle missing values and outliers
+- [x] Develop a multi-dimensional feature set by vectorizing high-context metadata (Titles, Descriptions, Topics) and encoding categorical attributes (Speaker Occupations) to serve as weighting factors in the recommendation ranking algorithm.
 
 ### Phase 2: Data Engineering & Dataset Sentiment Analysis
 
 **Goal:** Enrich the static dataset with sentiment scores.
 
-- [ ] Implement a Sentiment Analysis pipeline (e.g., using a pre-trained BERT model DistilBERT and RoBERTa and GoEmotions) to score each talk for emotional testing.
-- [ ] Identify emotion scores that each trasncript showcases, a semtiment trajectory that utilizes re-trained BERT model DistilBERT and RoBERTa and GoEmotions.
-- [ ] Synthesize sentiment polarity scores with content embeddings to align recommendations with the user’s emotional intent and topical interests
-- [ ] Save the enriched dataset into a structured format (vector database).
+- [x] Implement a Sentiment Analysis pipeline (e.g., using a pre-trained BERT model DistilBERT and RoBERTa and GoEmotions) to score each talk for emotional testing.
+- [x] Identify emotion scores that each trasncript showcases, a semtiment trajectory that utilizes re-trained BERT model DistilBERT and RoBERTa and GoEmotions.
+- [x] Synthesize sentiment polarity scores with content embeddings to align recommendations with the user’s emotional intent and topical interests
+- [x] Save the enriched dataset into a structured format (vector database).
 
 ### Phase 3: Recommendation Engine Development Deployment
 
-- [ ] Initialize ChromaDB with a collection schema that stores both semantic embeddings (content) and metadata (sentiment scores/trajectories)
-- [ ] Develop a hybrid recommendation algorithm: - **cosine similarity** and **Sentiment alignment**.
-- [ ] Test the engine with sample queries to ensure diverse and relevant outputs track mood matching, based on the user mood what is the recommendation mood.
+- [x] Initialize ChromaDB with a collection schema that stores both semantic embeddings (content) and metadata (sentiment scores/trajectories)
+- [x] Develop a hybrid recommendation algorithm: - **cosine similarity** and **Sentiment alignment**.
+- [x] Test the engine with sample queries to ensure diverse and relevant outputs track mood matching, based on the user mood what is the recommendation mood.
 - [ ] Add interactive prediction form
 - [ ] Write documentation and README
 
@@ -104,10 +104,10 @@ python src/main.py
 
 **Goal:** Build the interface and the real-time analysis pipeline.
 
-- [ ] Design the chatbot conversation flow (Greeting -> Query -> Analysis -> Recommendation).
-- [ ] Integrate a real-time sentiment analyzer for user prompts.
-- [ ] Implement "Sentiment Context Tracking" to understand if a user's mood changes during the conversation.
-- [ ] Connect the chatbot interface (Streamlit, Flask, or FastAPI) to the recommendation engine.
+- [x] Design the chatbot conversation flow (Greeting -> Query -> Analysis -> Recommendation).
+- [x] Integrate a real-time sentiment analyzer for user prompts.
+- [x] Implement "Sentiment Context Tracking" to understand if a user’s mood changes during the conversation.
+- [x] Connect the chatbot interface (Streamlit, Flask, or FastAPI) to the recommendation engine.
 
 ## Technical Stack
 
