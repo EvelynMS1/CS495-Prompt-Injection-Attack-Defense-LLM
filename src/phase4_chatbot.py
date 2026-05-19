@@ -2,6 +2,7 @@
 Phase 4: Streamlit Chatbot
 Flow: Greeting -> User query -> Real-time sentiment analysis -> Recommendation -> Display
 Tracks emotional context across the conversation.
+Supports multiple embedding and emotion detection models.
 """
 
 import os
@@ -11,10 +12,17 @@ import streamlit as st
 from transformers import pipeline
 
 sys.path.insert(0, os.path.dirname(__file__))
-from phase3_recommendation import RecommendationEngine, EMOTION_COLS
+from phase3_recommendation import RecommendationEngine
 from cf_baseline import CFBiasBaseline
+from model_config import (
+    EMBEDDING_MODELS,
+    EMOTION_MODELS,
+    DEFAULT_EMBEDDING,
+    DEFAULT_EMOTION,
+    EMOTION_COLS,
+    GO_EMOTIONS_MAP,
+)
 
-EMOTION_MODEL = "j-hartmann/emotion-english-distilroberta-base"
 EMOTION_LABELS = {
     "joy": "Joy",
     "sadness": "Sadness",
@@ -38,31 +46,61 @@ EMOTION_EMOJI = {
 # -- Cached resources ---------------------------------------------------------
 
 @st.cache_resource(show_spinner="Loading emotion model...")
-def load_emotion_model():
+def load_emotion_model(emotion_model_key):
+    """Load emotion detection model based on user selection."""
+    if emotion_model_key not in EMOTION_MODELS:
+        emotion_model_key = DEFAULT_EMOTION
+
+    model_config = EMOTION_MODELS[emotion_model_key]
+    model_name = model_config["model_name"]
+
     return pipeline(
         "text-classification",
-        model=EMOTION_MODEL,
+        model=model_name,
         top_k=None,
         truncation=True,
         max_length=256,
-    )
+    ), model_config
 
 
 @st.cache_resource(show_spinner="Connecting to recommendation engine...")
-def load_engine():
-    return RecommendationEngine()
+def load_engine(embedding_model_key):
+    """Load recommendation engine with specified embedding model."""
+    try:
+        return RecommendationEngine(embedding_model_key)
+    except (FileNotFoundError, RuntimeError) as e:
+        st.error(f"**Error loading recommendation engine:**\n\n{str(e)}")
+        st.info(
+            "💡 **Tip:** Run Phase 2 to generate embeddings for this model:\n"
+            f"```bash\npy -3.12 src/phase2_sentiment_embeddings.py\n```"
+        )
+        st.stop()
 
 
 @st.cache_resource(show_spinner="Loading CF bias baseline...")
 def load_cf_baseline():
+    """Load CF bias baseline for comparison."""
     return CFBiasBaseline()
 
 
 # -- Helpers ------------------------------------------------------------------
 
-def analyze_emotions(pipe, text):
+def analyze_emotions(pipe, text, model_config):
+    """Analyze emotions with support for different emotion models."""
     results = pipe(text)[0]
-    return {r["label"]: round(r["score"], 4) for r in results}
+
+    # If using GoEmotions (28 labels), aggregate to 7
+    if model_config["num_emotions"] == 28:
+        aggregated = {e: 0.0 for e in EMOTION_COLS}
+        for r in results:
+            broad = GO_EMOTIONS_MAP.get(r["label"], "neutral")
+            aggregated[broad] = round(aggregated[broad] + r["score"], 4)
+        # Normalize
+        total = sum(aggregated.values()) or 1.0
+        return {k: round(v / total, 4) for k, v in aggregated.items()}
+    else:
+        # Already 7 emotions
+        return {r["label"]: round(r["score"], 4) for r in results}
 
 
 def update_emotion_context(context, current, alpha=0.4):
@@ -119,9 +157,9 @@ st.set_page_config(
     layout="wide",
 )
 
-st.title("TED Talk Recommender")
+st.title("🎤 TED Talk Recommender")
 st.caption(
-    "Describe what you are feeling or looking for, and I will find TED Talks aligned to your mood."
+    "AI-powered recommendation system with configurable embedding and emotion models"
 )
 
 # Initialize session state
@@ -131,7 +169,8 @@ if "messages" not in st.session_state:
             "role": "assistant",
             "content": (
                 "Hello! I am your TED Talk recommender powered by sentiment analysis.\n\n"
-                "Tell me how you are feeling, or describe a topic you want to explore. "
+                "**First, please select your preferred models from the sidebar.**\n\n"
+                "Then tell me how you are feeling, or describe a topic you want to explore. "
                 "For example:\n"
                 "- *I feel burnt out and need motivation*\n"
                 "- *Something funny about human behavior*\n"
@@ -141,14 +180,85 @@ if "messages" not in st.session_state:
     ]
 if "emotion_context" not in st.session_state:
     st.session_state.emotion_context = {}
+if "selected_embedding_model" not in st.session_state:
+    st.session_state.selected_embedding_model = DEFAULT_EMBEDDING
+if "selected_emotion_model" not in st.session_state:
+    st.session_state.selected_emotion_model = DEFAULT_EMOTION
 
-emotion_pipe = load_emotion_model()
-engine = load_engine()
+# -- Sidebar: Model Configuration ---------------------------------------------
+with st.sidebar:
+    st.header("⚙️ Model Configuration")
+
+    # Embedding Model Selection
+    st.subheader("1️⃣ Embedding Model")
+    embedding_options = list(EMBEDDING_MODELS.keys())
+
+    selected_embedding = st.selectbox(
+        "Choose embedding model:",
+        options=embedding_options,
+        index=embedding_options.index(st.session_state.selected_embedding_model),
+        help="Determines how talk content is vectorized for similarity search",
+        key="embedding_selector"
+    )
+
+    # Show model details
+    if selected_embedding:
+        model_info = EMBEDDING_MODELS[selected_embedding]
+        st.caption(
+            f"🔹 **Dimensions:** {model_info['dimensions']} | "
+            f"**Speed:** {model_info['speed']}"
+        )
+
+    st.divider()
+
+    # Emotion Model Selection
+    st.subheader("2️⃣ Emotion Detection Model")
+    emotion_options = list(EMOTION_MODELS.keys())
+
+    selected_emotion = st.selectbox(
+        "Choose emotion model:",
+        options=emotion_options,
+        index=emotion_options.index(st.session_state.selected_emotion_model),
+        help="Analyzes emotional tone of your queries in real-time",
+        key="emotion_selector"
+    )
+
+    # Show model details
+    if selected_emotion:
+        emotion_info = EMOTION_MODELS[selected_emotion]
+        st.caption(
+            f"🔹 **Emotions:** {emotion_info['num_emotions']} labels"
+        )
+
+    st.divider()
+
+    # Apply button
+    if st.button("🔄 Apply Model Selection", use_container_width=True, type="primary"):
+        if (selected_embedding != st.session_state.selected_embedding_model or
+            selected_emotion != st.session_state.selected_emotion_model):
+
+            st.session_state.selected_embedding_model = selected_embedding
+            st.session_state.selected_emotion_model = selected_emotion
+
+            # Clear cache and reset conversation
+            st.cache_resource.clear()
+            st.session_state.messages = [st.session_state.messages[0]]
+            st.session_state.emotion_context = {}
+
+            st.success("✅ Models updated! Reloading...")
+            st.rerun()
+        else:
+            st.info("Models already selected")
+
+# Load models with current selection
+emotion_pipe, emotion_config = load_emotion_model(st.session_state.selected_emotion_model)
+engine = load_engine(st.session_state.selected_embedding_model)
 cf_baseline = load_cf_baseline()
 
-# -- Sidebar: emotional context -----------------------------------------------
+# Continue sidebar
 with st.sidebar:
-    st.header("Your Emotional Profile")
+    # Emotional Profile
+    st.header("❤️ Your Emotional Profile")
     st.caption("Updates as you chat")
 
     if st.session_state.emotion_context:
@@ -162,12 +272,21 @@ with st.sidebar:
         st.info("Start chatting to see your emotional profile here.")
 
     st.divider()
+
+    # Settings
+    st.header("🎚️ Settings")
     top_k = st.slider("Number of recommendations", min_value=1, max_value=10, value=5)
 
-    if st.button("Reset conversation", use_container_width=True):
+    if st.button("🔄 Reset Conversation", use_container_width=True):
         st.session_state.messages = [st.session_state.messages[0]]
         st.session_state.emotion_context = {}
         st.rerun()
+
+    # Model info display
+    st.divider()
+    st.caption("**Current Configuration:**")
+    st.caption(f"📊 Embedding: {st.session_state.selected_embedding_model}")
+    st.caption(f"💭 Emotion: {st.session_state.selected_emotion_model}")
 
 # -- Chat history -------------------------------------------------------------
 for msg in st.session_state.messages:
@@ -182,16 +301,11 @@ if user_input := st.chat_input("How are you feeling? What are you looking for?")
 
     with st.chat_message("assistant"):
         with st.spinner("Analyzing your mood and finding talks..."):
-            current_emotions = analyze_emotions(emotion_pipe, user_input)
+            current_emotions = analyze_emotions(emotion_pipe, user_input, emotion_config)
             st.session_state.emotion_context = update_emotion_context(
                 st.session_state.emotion_context, current_emotions
             )
             recommendations = engine.recommend(
-                query_text=user_input,
-                user_emotions=st.session_state.emotion_context,
-                top_k=top_k,
-            )
-            cf_recs = cf_baseline.recommend(
                 query_text=user_input,
                 user_emotions=st.session_state.emotion_context,
                 top_k=top_k,
@@ -201,18 +315,6 @@ if user_input := st.chat_input("How are you feeling? What are you looking for?")
             )
 
         st.markdown(response)
-
-        with st.expander("Compare: CF Popularity Bias Baseline"):
-            st.caption(
-                "**CF item-bias baseline** — ranked by log-normalized view count "
-                "(popularity) + the same emotion-alignment score as the main model. "
-                "No semantic understanding of your query is used. "
-                "Overlap with the results above shows what popularity alone can explain; "
-                "divergence shows what semantic retrieval adds."
-            )
-            for i, rec in enumerate(cf_recs, 1):
-                st.markdown(format_recommendation(rec, i))
-                st.markdown("")
 
     st.session_state.messages.append({"role": "assistant", "content": response})
     st.rerun()
