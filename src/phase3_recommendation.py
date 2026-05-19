@@ -1,6 +1,7 @@
 """
 Phase 3: Recommendation Engine
 Hybrid ranking: cosine similarity (content) + sentiment alignment (emotion match)
+Supports multiple embedding models via dynamic configuration
 """
 
 import os
@@ -8,22 +9,101 @@ import sys
 
 import chromadb
 from sentence_transformers import SentenceTransformer
+from transformers import AutoModel, AutoTokenizer
+import torch
 
-CHROMA_DIR = os.path.join(os.path.dirname(__file__), "..", "data", "chromadb")
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-EMOTION_COLS = ["anger", "disgust", "fear", "joy", "neutral", "sadness", "surprise"]
+from model_config import EMBEDDING_MODELS, DEFAULT_EMBEDDING, EMOTION_COLS
 
 CONTENT_WEIGHT = 0.7
 SENTIMENT_WEIGHT = 0.3
 
 
 class RecommendationEngine:
-    def __init__(self):
-        print("Initializing recommendation engine...")
-        self.embed_model = SentenceTransformer(EMBEDDING_MODEL)
-        client = chromadb.PersistentClient(path=CHROMA_DIR)
-        self.collection = client.get_collection("ted_talks")
-        print(f"Connected to ChromaDB: {self.collection.count():,} talks available.")
+    def __init__(self, embedding_model_key=None):
+        """
+        Initialize recommendation engine with specified embedding model.
+
+        Args:
+            embedding_model_key: Key from EMBEDDING_MODELS dict, or None for default
+        """
+        if embedding_model_key is None:
+            embedding_model_key = DEFAULT_EMBEDDING
+
+        if embedding_model_key not in EMBEDDING_MODELS:
+            raise ValueError(f"Unknown embedding model: {embedding_model_key}")
+
+        self.model_config = EMBEDDING_MODELS[embedding_model_key]
+        self.model_key = embedding_model_key
+
+        print(f"Initializing recommendation engine with {embedding_model_key}...")
+
+        # Load embedding model
+        model_name = self.model_config["model_name"]
+
+        # Check if it's a sentence-transformer or raw BERT model
+        if model_name.startswith("sentence-transformers/"):
+            self.embed_model = SentenceTransformer(model_name)
+            self.is_sentence_transformer = True
+        else:
+            # Raw BERT-style model
+            self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+            self.bert_model = AutoModel.from_pretrained(model_name)
+            self.bert_model.eval()
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.bert_model.to(self.device)
+            self.is_sentence_transformer = False
+
+        # Connect to ChromaDB
+        chroma_dir = os.path.join(
+            os.path.dirname(__file__), "..", "data", self.model_config["chroma_dir"]
+        )
+
+        if not os.path.exists(chroma_dir):
+            raise FileNotFoundError(
+                f"ChromaDB not found for {embedding_model_key} at {chroma_dir}\n"
+                f"Please run Phase 2 with this embedding model first."
+            )
+
+        client = chromadb.PersistentClient(path=chroma_dir)
+        collection_name = self.model_config["collection_name"]
+
+        try:
+            self.collection = client.get_collection(collection_name)
+            print(f"Connected to ChromaDB '{collection_name}': {self.collection.count():,} talks available.")
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to load collection '{collection_name}' from {chroma_dir}\n"
+                f"Error: {e}\n"
+                f"Please run Phase 2 with the {embedding_model_key} model first."
+            )
+
+    def _encode_text(self, text):
+        """Encode text to embedding vector."""
+        if self.is_sentence_transformer:
+            return self.embed_model.encode([text])[0].tolist()
+        else:
+            # Manual BERT encoding with mean pooling
+            inputs = self.tokenizer(
+                text,
+                return_tensors="pt",
+                truncation=True,
+                max_length=512,
+                padding=True
+            ).to(self.device)
+
+            with torch.no_grad():
+                outputs = self.bert_model(**inputs)
+                # Mean pooling over tokens
+                attention_mask = inputs["attention_mask"]
+                token_embeddings = outputs.last_hidden_state
+                input_mask_expanded = attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
+                sum_embeddings = torch.sum(token_embeddings * input_mask_expanded, 1)
+                sum_mask = torch.clamp(input_mask_expanded.sum(1), min=1e-9)
+                embedding = (sum_embeddings / sum_mask).squeeze()
+
+                # Normalize
+                embedding = torch.nn.functional.normalize(embedding, p=2, dim=0)
+                return embedding.cpu().numpy().tolist()
 
     def _sentiment_alignment(self, talk_meta, user_emotions):
         if not user_emotions:
@@ -40,7 +120,7 @@ class RecommendationEngine:
         user_emotions: dict like {"joy": 0.7, "sadness": 0.1, ...}
         Returns list of dicts with talk metadata and scores.
         """
-        query_vec = self.embed_model.encode([query_text])[0].tolist()
+        query_vec = self._encode_text(query_text)
 
         n_candidates = min(top_k * 6, self.collection.count())
         results = self.collection.query(
