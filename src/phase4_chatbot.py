@@ -12,6 +12,7 @@ from transformers import pipeline
 
 sys.path.insert(0, os.path.dirname(__file__))
 from phase3_recommendation import RecommendationEngine, EMOTION_COLS
+from cf_baseline import CFBiasBaseline
 
 EMOTION_MODEL = "j-hartmann/emotion-english-distilroberta-base"
 EMOTION_LABELS = {
@@ -50,6 +51,11 @@ def load_emotion_model():
 @st.cache_resource(show_spinner="Connecting to recommendation engine...")
 def load_engine():
     return RecommendationEngine()
+
+
+@st.cache_resource(show_spinner="Loading CF bias baseline...")
+def load_cf_baseline():
+    return CFBiasBaseline()
 
 
 # -- Helpers ------------------------------------------------------------------
@@ -138,6 +144,7 @@ if "emotion_context" not in st.session_state:
 
 emotion_pipe = load_emotion_model()
 engine = load_engine()
+cf_baseline = load_cf_baseline()
 
 # -- Sidebar: emotional context -----------------------------------------------
 with st.sidebar:
@@ -184,11 +191,28 @@ if user_input := st.chat_input("How are you feeling? What are you looking for?")
                 user_emotions=st.session_state.emotion_context,
                 top_k=top_k,
             )
+            cf_recs = cf_baseline.recommend(
+                query_text=user_input,
+                user_emotions=st.session_state.emotion_context,
+                top_k=top_k,
+            )
             response = build_bot_response(
                 user_input, st.session_state.emotion_context, recommendations
             )
 
         st.markdown(response)
+
+        with st.expander("Compare: CF Popularity Bias Baseline"):
+            st.caption(
+                "**CF item-bias baseline** — ranked by log-normalized view count "
+                "(popularity) + the same emotion-alignment score as the main model. "
+                "No semantic understanding of your query is used. "
+                "Overlap with the results above shows what popularity alone can explain; "
+                "divergence shows what semantic retrieval adds."
+            )
+            for i, rec in enumerate(cf_recs, 1):
+                st.markdown(format_recommendation(rec, i))
+                st.markdown("")
 
     st.session_state.messages.append({"role": "assistant", "content": response})
     st.rerun()
